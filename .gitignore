@@ -1,0 +1,47 @@
+# Python
+*.pyc
+__pycache__/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Environment
+# .env
+# *.env.local
+
+# Large datasets
+*.csv
+*.zip
+*.xlsx
+backend/base_data/*.csv
+backend/data_sample/*.csv
+backend/intelligence/models/*.pkl
+backend/intelligence/models/*.joblib
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (Frontend)
+node_modules/
+dist/
+build/
+.cache/
+
+# Folder
+notes
+test
+
+# Script
+*.json
+start_backends.sh

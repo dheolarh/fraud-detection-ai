@@ -1,0 +1,40 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# Redis (for TransactionSpikeLogic)
+redis==5.0.1
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+
+# Machine Learning
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# Geolocation (for LocationDetectionLogic, CrossBorderLogic, LoginIntegrityLogic)
+geopy==2.4.0
+
+# Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Logging
+loguru==0.7.2
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.32.5
+
+# HTTP Client (for banking backend communication)
+httpx==0.25.2
+
+# Scheduler (for periodic model retraining)
+schedule==1.2.0

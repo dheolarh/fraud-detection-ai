@@ -6,6 +6,7 @@ Endpoints for fraud alerts, stats, and detection results
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta
 from storage.database import get_db
 from storage.models import FraudDecision, Transaction
 from sqlalchemy import desc, or_
@@ -267,4 +268,88 @@ async def get_suspicion_level(user_id: str, db: Session = Depends(get_db)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating suspicion level: {str(e)}")
+
+
+@router.get("/trend/{user_id}")
+async def get_user_risk_trend(user_id: str, db: Session = Depends(get_db)):
+    """
+    Get user risk trend for 7-day and 30-day windows.
+
+    Returns:
+    - average risk score for last 7 and 30 days
+    - flagged counts for last 7 and 30 days
+    """
+    try:
+        from clients.banking_client import get_banking_client
+
+        now = datetime.utcnow()
+        seven_days_ago = now - timedelta(days=7)
+        thirty_days_ago = now - timedelta(days=30)
+
+        banking_client = get_banking_client()
+        result = await banking_client.get_transactions(
+            user_id=user_id,
+            start_date=thirty_days_ago,
+            limit=10000,
+        )
+
+        transactions = result.get("transactions", [])
+        user_transaction_ids = [
+            t.get("transaction_id")
+            for t in transactions
+            if t.get("transaction_id") is not None
+        ]
+
+        if not user_transaction_ids:
+            return {
+                "user_id": user_id,
+                "avg_risk_score_7d": 0.0,
+                "avg_risk_score_30d": 0.0,
+                "flagged_count_7d": 0,
+                "flagged_count_30d": 0,
+                "sample_size_7d": 0,
+                "sample_size_30d": 0,
+                "trend": "stable",
+            }
+
+        decisions = db.query(FraudDecision).filter(
+            FraudDecision.transaction_id.in_(user_transaction_ids),
+            FraudDecision.timestamp >= thirty_days_ago,
+        ).all()
+
+        def _window_stats(cutoff: datetime) -> dict:
+            window = [d for d in decisions if d.timestamp and d.timestamp >= cutoff]
+            scored = [float(d.final_risk_score) for d in window if d.final_risk_score is not None]
+            flagged = [d for d in window if d.verdict in ["MONITORED", "FLAGGED"]]
+
+            avg_risk = round(sum(scored) / len(scored), 4) if scored else 0.0
+            return {
+                "avg_risk": avg_risk,
+                "flagged_count": len(flagged),
+                "sample_size": len(window),
+            }
+
+        stats_7d = _window_stats(seven_days_ago)
+        stats_30d = _window_stats(thirty_days_ago)
+
+        if stats_7d["avg_risk"] > stats_30d["avg_risk"] + 0.03:
+            trend = "up"
+        elif stats_7d["avg_risk"] < stats_30d["avg_risk"] - 0.03:
+            trend = "down"
+        else:
+            trend = "stable"
+
+        return {
+            "user_id": user_id,
+            "avg_risk_score_7d": stats_7d["avg_risk"],
+            "avg_risk_score_30d": stats_30d["avg_risk"],
+            "flagged_count_7d": stats_7d["flagged_count"],
+            "flagged_count_30d": stats_30d["flagged_count"],
+            "sample_size_7d": stats_7d["sample_size"],
+            "sample_size_30d": stats_30d["sample_size"],
+            "trend": trend,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating risk trend: {str(e)}")
 

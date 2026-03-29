@@ -4,21 +4,94 @@ REST APIs for fraud backend to query transaction data
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from database import get_db
 from models.database import User, Transaction
 from schemas import TransactionCreate, TransactionResponse
+from v2.transaction_context_builder import build_context_payload
 
 # Setup logger
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["banking"])
+
+
+def _build_account_profile(
+    db: Session,
+    subject_user: Optional[User],
+    sender_id: str,
+    receiver_id: str,
+) -> Dict[str, Any]:
+    """Build lightweight account profile features for smarter fraud analysis payload."""
+    if not subject_user:
+        return {}
+
+    now = datetime.utcnow()
+    created_at = subject_user.created_at or now
+    account_age_days = max(0, (now - created_at).days)
+
+    user_txn_query = db.query(Transaction).filter(
+        (Transaction.sender_id == subject_user.user_id) | (Transaction.receiver_id == subject_user.user_id)
+    )
+
+    avg_amount = user_txn_query.with_entities(func.avg(Transaction.amount)).scalar()
+    daily_count = user_txn_query.filter(Transaction.timestamp >= now - timedelta(hours=24)).count()
+
+    beneficiary_pair_query = db.query(Transaction).filter(
+        (
+            (Transaction.sender_id == sender_id)
+            & (Transaction.receiver_id == receiver_id)
+        )
+        |
+        (
+            (Transaction.sender_id == receiver_id)
+            & (Transaction.receiver_id == sender_id)
+        )
+    )
+
+    beneficiary_history_count = beneficiary_pair_query.count()
+    beneficiary_avg_amount = beneficiary_pair_query.with_entities(func.avg(Transaction.amount)).scalar()
+
+    first_beneficiary_txn = (
+        db.query(Transaction)
+        .filter(
+            (
+                (Transaction.sender_id == sender_id)
+                & (Transaction.receiver_id == receiver_id)
+            )
+            |
+            (
+                (Transaction.sender_id == receiver_id)
+                & (Transaction.receiver_id == sender_id)
+            )
+        )
+        .order_by(Transaction.timestamp.asc())
+        .first()
+    )
+
+    beneficiary_age_days = None
+    if first_beneficiary_txn and first_beneficiary_txn.timestamp:
+        beneficiary_age_days = max(0, (now - first_beneficiary_txn.timestamp).days)
+
+    beneficiary_first_seen = None
+    if first_beneficiary_txn and first_beneficiary_txn.timestamp:
+        beneficiary_first_seen = first_beneficiary_txn.timestamp.isoformat()
+
+    return {
+        "account_age_days": account_age_days,
+        "avg_transaction_amount": float(avg_amount) if avg_amount is not None else 0.0,
+        "daily_txn_count_24h": daily_count,
+        "beneficiary_age_days": beneficiary_age_days,
+        "beneficiary_history_count": beneficiary_history_count,
+        "beneficiary_first_seen": beneficiary_first_seen,
+        "beneficiary_avg_amount": float(beneficiary_avg_amount) if beneficiary_avg_amount is not None else 0.0,
+    }
 
 
 @router.get("/transactions")
@@ -203,6 +276,7 @@ async def get_transaction_stats(
 @router.post("/transactions", response_model=TransactionResponse)
 async def create_transaction(
     transaction: TransactionCreate,
+    req: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -322,22 +396,45 @@ async def create_transaction(
         try:
             import httpx
             print(f"Calling fraud detection for TX-{new_transaction.transaction_id}", file=sys.stderr, flush=True)
+
+            profile_subject = sender if sender else receiver
+            account_profile = _build_account_profile(
+                db=db,
+                subject_user=profile_subject,
+                sender_id=new_transaction.sender_id,
+                receiver_id=new_transaction.receiver_id,
+            )
+
+            request_meta = {
+                "ip_address": req.client.host if req.client else None,
+                "user_agent": req.headers.get("user-agent"),
+                "device_id": req.headers.get("x-device-id"),
+                "session_age_seconds": None,
+                "is_new_device": None,
+            }
+
+            enriched_payload = build_context_payload(
+                transaction={
+                    "transaction_id": new_transaction.transaction_id,
+                    "sender_id": new_transaction.sender_id,
+                    "sender_name": new_transaction.sender_name,
+                    "receiver_id": new_transaction.receiver_id,
+                    "receiver_name": new_transaction.receiver_name,
+                    "amount": float(new_transaction.amount),
+                    "currency": new_transaction.currency,
+                    "category": new_transaction.category,
+                    "location": new_transaction.location,
+                    "narration": new_transaction.narration,
+                    "timestamp": new_transaction.timestamp.isoformat(),
+                },
+                request_meta=request_meta,
+                account_profile=account_profile,
+            )
+
             async with httpx.AsyncClient(timeout=5.0) as client:
                 fraud_response = await client.post(
-                    "http://localhost:8000/api/fraud/analyze",
-                    json={
-                        "transaction_id": new_transaction.transaction_id,
-                        "sender_id": new_transaction.sender_id,
-                        "sender_name": new_transaction.sender_name,
-                        "receiver_id": new_transaction.receiver_id,
-                        "receiver_name": new_transaction.receiver_name,
-                        "amount": float(new_transaction.amount),
-                        "currency": new_transaction.currency,
-                        "category": new_transaction.category,
-                        "location": new_transaction.location,
-                        "narration": new_transaction.narration,
-                        "timestamp": new_transaction.timestamp.isoformat()
-                    }
+                    "http://localhost:8000/api/fraud/analyze-smart",
+                    json=enriched_payload,
                 )
                 
                 if fraud_response.status_code == 200:

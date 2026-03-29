@@ -1,0 +1,1 @@
+"""Fraud AI smart modules."""

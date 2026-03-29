@@ -28,6 +28,17 @@ interface TransactionRequest {
     narration: string;
 }
 
+interface RiskTrendResponse {
+    user_id: string;
+    avg_risk_score_7d: number;
+    avg_risk_score_30d: number;
+    flagged_count_7d: number;
+    flagged_count_30d: number;
+    sample_size_7d: number;
+    sample_size_30d: number;
+    trend: 'up' | 'down' | 'stable';
+}
+
 class ApiService {
     private token: string | null = null;
 
@@ -164,6 +175,13 @@ class ApiService {
             headers: this.getHeaders(),
         });
         return this.handleResponse<{ suspicion_level: number; description: string; flagged_count: number; average_risk_score: number }>(response);
+    }
+
+    async getRiskTrend(userId: string): Promise<RiskTrendResponse> {
+        const response = await fetch(`${API_BASE_URL}/api/fraud/trend/${userId}`, {
+            headers: this.getHeaders(),
+        });
+        return this.handleResponse<RiskTrendResponse>(response);
     }
 
     async getBankLocation(): Promise<{ country: string; currency: string; bank_name: string }> {

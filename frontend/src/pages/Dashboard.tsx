@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Header } from '@/components/dashboard/Header';
 import { IdentityCard } from '@/components/dashboard/IdentityCard';
 import { ActivityScoreCard } from '@/components/dashboard/ActivityScoreCard';
+import { RiskTrendCard } from '@/components/dashboard/RiskTrendCard';
 import { TransactionFeedCard } from '@/components/dashboard/TransactionFeedCard';
 import { AnomaliesCard } from '@/components/dashboard/AnomaliesCard';
 import { GeoAnalyticsCard } from '@/components/dashboard/GeoAnalyticsCard';
@@ -99,9 +100,10 @@ export default function Dashboard() {
 
       <main className="container mx-auto p-4 md:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {/* Row 1: Identity, Activity Score, Geo Analytics */}
+          {/* Row 1: Identity, Activity Score, Risk Trend, Geo Analytics */}
           <IdentityCard />
           <ActivityScoreCard />
+          <RiskTrendCard />
           <GeoAnalyticsCard />
 
           {/* Row 2: Real-time Feed (full width) */}

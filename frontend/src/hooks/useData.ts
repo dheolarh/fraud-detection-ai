@@ -193,6 +193,49 @@ export function useSuspicionLevel(userId: string, pollInterval: number = 5000) {
     return { suspicionLevel, description, flaggedCount, averageRiskScore, loading, error };
 }
 
+export function useRiskTrend(userId: string, pollInterval: number = 15000) {
+    const [avgRiskScore7d, setAvgRiskScore7d] = useState<number>(0);
+    const [avgRiskScore30d, setAvgRiskScore30d] = useState<number>(0);
+    const [flaggedCount7d, setFlaggedCount7d] = useState<number>(0);
+    const [flaggedCount30d, setFlaggedCount30d] = useState<number>(0);
+    const [trend, setTrend] = useState<'up' | 'down' | 'stable'>('stable');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchRiskTrend = async () => {
+            try {
+                const data = await api.getRiskTrend(userId);
+                setAvgRiskScore7d((data.avg_risk_score_7d || 0) * 100);
+                setAvgRiskScore30d((data.avg_risk_score_30d || 0) * 100);
+                setFlaggedCount7d(data.flagged_count_7d || 0);
+                setFlaggedCount30d(data.flagged_count_30d || 0);
+                setTrend(data.trend || 'stable');
+                setError(null);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to fetch risk trend');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRiskTrend();
+        const interval = setInterval(fetchRiskTrend, pollInterval);
+
+        return () => clearInterval(interval);
+    }, [userId, pollInterval]);
+
+    return {
+        avgRiskScore7d,
+        avgRiskScore30d,
+        flaggedCount7d,
+        flaggedCount30d,
+        trend,
+        loading,
+        error,
+    };
+}
+
 export function useBankCurrency() {
     const [currency, setCurrency] = useState<string>('GBP'); // Default to GBP
     const [loading, setLoading] = useState(true);

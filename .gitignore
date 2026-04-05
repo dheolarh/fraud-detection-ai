@@ -41,6 +41,15 @@ build/
 # Folder
 notes
 test
+skills.md
+LocalTests
+
+# Database
+*.db
+
+# Backend
+banking_backend/.env
+backend/.env
 
 # Script
 *.json

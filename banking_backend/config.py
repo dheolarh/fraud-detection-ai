@@ -139,3 +139,5 @@ def convert_to_bank_currency(amount: float, from_currency: str) -> float:
         else:
             print(f"❌ No rate available for {from_currency} → {BANK_CURRENCY}, using 1:1 (NO CONVERSION)")
             return amount
+
+# Trigger reload

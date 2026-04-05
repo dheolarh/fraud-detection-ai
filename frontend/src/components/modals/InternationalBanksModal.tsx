@@ -5,15 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send } from 'lucide-react';
+import { Send, Globe, Wallet, User as UserIcon, ArrowRightLeft, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { BankFormData, TransactionCategory } from '@/types/transaction';
+import { TransactionCategory } from '@/types/transaction';
 import internationalBankLogo from '@/assets/internationalBank.png';
 import { CountryDropdown } from '@/components/ui/CountryDropdown';
 import { AccountGenerator } from '@/components/ui/AccountGenerator';
 import { formatCurrency } from '@/utils/currency';
 
-// Transaction categories
 const categories: TransactionCategory[] = ['Shopping', 'Bills', 'Transfer', 'Salary', 'Entertainment', 'Food', 'Travel', 'Healthcare', 'Other'];
 
 interface InternationalBankModalProps {
@@ -23,213 +22,149 @@ interface InternationalBankModalProps {
 }
 
 export function InternationalBankModal({ open, onOpenChange, onSendTransaction }: InternationalBankModalProps) {
-  // Fixed HooverBank receiver (where money goes TO)
   const HOOVER_USER_ID = 'HOV-2426-1226';
   const HOOVER_USER_NAME = 'John Steward';
   const HOOVER_CURRENCY = 'GBP';
 
-  // Sender details (random generated)
   const [senderCountry, setSenderCountry] = useState('');
   const [senderCurrency, setSenderCurrency] = useState('USD');
   const [senderName, setSenderName] = useState('');
   const [senderId, setSenderId] = useState('');
-
   const [amount, setAmount] = useState<number>(0);
   const [category, setCategory] = useState<TransactionCategory>('Transfer');
   const [narration, setNarration] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validation
-    if (!senderCountry) {
-      toast.error('Please select sender country');
-      return;
-    }
-    if (!senderName || !senderId) {
-      toast.error('Please generate sender details');
-      return;
-    }
-    if (amount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
+    if (!senderCountry) { toast.error('Please select sender country'); return; }
+    if (!senderName || !senderId) { toast.error('Please generate sender details'); return; }
+    if (amount <= 0) { toast.error('Please enter a valid amount'); return; }
 
     try {
-      // EXCHANGE RATE BRIDGE: Convert to GBP before sending to HooverBank
       let convertedAmount = amount;
-      let finalCurrency = HOOVER_CURRENCY; // GBP
-
+      const finalCurrency = HOOVER_CURRENCY;
       if (senderCurrency !== HOOVER_CURRENCY) {
-        // Import exchange rate service
         const { convertCurrency } = await import('@/lib/exchangeRate');
-
         try {
-          // Use live API to convert (supports ALL world currencies)
           convertedAmount = await convertCurrency(amount, senderCurrency, HOOVER_CURRENCY);
-          console.log(`Exchange Rate Bridge (Live API): ${amount.toLocaleString()} ${senderCurrency} → ${convertedAmount.toFixed(2)} ${HOOVER_CURRENCY}`);
         } catch (error) {
-          console.error('Exchange rate conversion failed:', error);
           toast.error(`Failed to convert ${senderCurrency} to ${HOOVER_CURRENCY}`);
           return;
         }
       }
 
-      // Create transaction data with CONVERTED amount
       const transactionData = {
         sender_id: senderId,
         sender_name: senderName,
         receiver_id: HOOVER_USER_ID,
         receiver_name: HOOVER_USER_NAME,
-        amount: convertedAmount,  // Send converted amount
-        currency: finalCurrency,  // Send GBP
+        amount: convertedAmount,
+        currency: finalCurrency,
         category: category,
-        location: senderCountry,  // Sender's country
-        narration: `${amount.toLocaleString()} ${senderCurrency} from ${senderName}`,  // Show original in narration
-        transaction_flow: 'incoming'  // Incoming to HooverBank
+        location: senderCountry,
+        narration: `${amount.toLocaleString()} ${senderCurrency} from ${senderName}`,
+        transaction_flow: 'incoming'
       };
 
-      // Send transaction
       await onSendTransaction(transactionData);
-
-      toast.success('Transaction sent successfully', {
-        description: `${formatCurrency(amount, senderCurrency)} sent to ${HOOVER_USER_NAME}`,
-      });
-
-      // Reset form
+      toast.success('Transfer Authorized', { description: `${formatCurrency(amount, senderCurrency)} incoming to ${HOOVER_USER_NAME}` });
       setAmount(0);
       setNarration('');
-      // Keep sender details (they might be locked)
-
       onOpenChange(false);
-    } catch (error) {
-      console.error('Transaction error:', error);
-      toast.error('Failed to send transaction');
-    }
+    } catch (error) { toast.error('Transfer Failed'); }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-2">
-            <img src={internationalBankLogo} alt="International Bank" className="h-10 w-auto" />
-            <div>
-              <DialogTitle className="text-internationalBank">International Banks</DialogTitle>
-              <DialogDescription className="text-xs">
-                Send money to HooverBank
-              </DialogDescription>
-            </div>
-          </div>
-
-          {/* Receiver Info Card (Fixed - HooverBank User) */}
-          <div className="bg-muted/30 rounded-lg p-2 mt-2">
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Sending To:</p>
-            <div className="flex items-center justify-between text-xs">
-              <div>
-                <span className="font-mono font-medium">{HOOVER_USER_ID}</span>
-                <span className="mx-1">•</span>
-                <span className="font-medium">{HOOVER_USER_NAME}</span>
+      <DialogContent className="max-w-md glass-panel border-white/10 p-0 overflow-hidden shadow-2xl">
+        <div className="p-6 bg-white/[0.02] border-b border-white/5">
+           <DialogHeader>
+              <div className="flex items-center gap-4 mb-2">
+                 <div className="h-12 w-12 rounded-xl bg-internationalBank/10 flex items-center justify-center border border-internationalBank/20 shadow-inner">
+                    <Globe className="h-6 w-6 text-internationalBank" />
+                 </div>
+                 <div>
+                    <DialogTitle className="text-xl font-bold font-display uppercase tracking-widest text-white">Global Gateway</DialogTitle>
+                    <DialogDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 pt-1">External Inward Remittance</DialogDescription>
+                 </div>
               </div>
-              <span className="text-muted-foreground">HooverBank (UK)</span>
-            </div>
-          </div>
-        </DialogHeader>
+           </DialogHeader>
+        </div>
 
-        <ScrollArea className="h-[350px] pr-4">
-          <form onSubmit={handleSubmit} className="space-y-4 mx-4 mt-4">
-            {/* Sender Country */}
-            <div className="space-y-2">
-              <Label className="text-sm">Sender Country</Label>
-              <CountryDropdown
-                value={senderCountry}
-                onChange={(country, currency) => {
-                  setSenderCountry(country);
-                  setSenderCurrency(currency);
-                }}
-                placeholder="Select sender's country"
-              />
-            </div>
+        <ScrollArea className="h-[450px] scrollbar-thin">
+           <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-4">
+                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Target Identity</span>
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                 </div>
+                 <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-white/5">
+                       <UserIcon className="h-5 w-5 text-primary/60" />
+                    </div>
+                    <div>
+                       <p className="text-sm font-bold font-display text-white">{HOOVER_USER_NAME}</p>
+                       <p className="text-[10px] font-mono text-muted-foreground">{HOOVER_USER_ID} • Hoover Bank (UK)</p>
+                    </div>
+                 </div>
+              </div>
 
-            {/* Sender Name */}
-            <AccountGenerator
-              type="name"
-              prefix="INT"
-              value={senderName}
-              onChange={setSenderName}
-              label="Sender Name"
-            />
+              <div className="space-y-4 pt-2">
+                 <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Origin Node</Label>
+                    <CountryDropdown
+                      value={senderCountry}
+                      onChange={(country, currency) => { setSenderCountry(country); setSenderCurrency(currency); }}
+                      placeholder="Select Sending Territory"
+                      className="h-11 bg-white/5 border-white/5 rounded-xl font-bold transition-all"
+                    />
+                 </div>
 
-            {/* Sender ID */}
-            <AccountGenerator
-              type="account"
-              prefix="INT"
-              value={senderId}
-              onChange={setSenderId}
-              label="Sender Account ID"
-            />
+                 <div className="grid grid-cols-1 gap-4">
+                    <AccountGenerator type="name" prefix="INT" value={senderName} onChange={setSenderName} label="Originator Designation" />
+                    <AccountGenerator type="account" prefix="INT" value={senderId} onChange={setSenderId} label="Originating Registry ID" />
+                 </div>
 
-            {/* Amount */}
-            <div className="space-y-2">
-              <Label htmlFor="amount" className="text-sm">
-                Amount {senderCurrency ? `(${senderCurrency})` : ''}
-              </Label>
-              <Input
-                id="amount"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={amount || ''}
-                onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              />
-              {amount > 0 && senderCurrency !== HOOVER_CURRENCY && (
-                <p className="text-xs text-muted-foreground">
-                  Will be converted to {HOOVER_CURRENCY} for HooverBank
-                </p>
-              )}
-            </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="amount" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Quantum Value {senderCurrency ? `(${senderCurrency})` : ''}</Label>
+                    <div className="relative group">
+                       <Wallet className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                       <Input id="amount" type="number" step="0.01" placeholder="0.00" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className="h-11 pl-10 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl font-bold font-display text-sm transition-all" />
+                    </div>
+                    {amount > 0 && senderCurrency !== HOOVER_CURRENCY && (
+                      <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-primary/5 border border-primary/10">
+                         <ArrowRightLeft className="h-3 w-3 text-primary/60" />
+                         <p className="text-[10px] font-bold text-primary/80 italic uppercase">Conversion logic applied to {HOOVER_CURRENCY}</p>
+                      </div>
+                    )}
+                 </div>
 
-            {/* Category */}
-            <div className="space-y-2">
-              <Label htmlFor="category" className="text-sm">Category</Label>
-              <Select
-                value={category}
-                onValueChange={(value) => setCategory(value as TransactionCategory)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="category" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">System Category</Label>
+                    <Select value={category} onValueChange={(value) => setCategory(value as TransactionCategory)}>
+                       <SelectTrigger className="h-11 bg-white/5 border-white/5 rounded-xl font-bold">
+                          <SelectValue placeholder="Select classification" />
+                       </SelectTrigger>
+                       <SelectContent className="glass-panel border-white/10">
+                          {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                       </SelectContent>
+                    </Select>
+                 </div>
 
-            {/* Narration (Optional) */}
-            <div className="space-y-2">
-              <Label htmlFor="narration" className="text-sm">Narration (Optional)</Label>
-              <Input
-                id="narration"
-                placeholder="Enter transaction description"
-                value={narration}
-                onChange={(e) => setNarration(e.target.value)}
-                maxLength={100}
-              />
-            </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="narration" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Remittance Narrative</Label>
+                    <Input id="narration" placeholder="Internal audit narration..." value={narration} onChange={(e) => setNarration(e.target.value)} maxLength={100} className="h-11 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl font-bold text-xs transition-all" />
+                 </div>
+              </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-internationalBank hover:bg-internationalBank-secondary text-primary-foreground"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send to Hoover Bank
-            </Button>
-          </form>
+              <div className="pt-6 border-t border-white/5 flex gap-3">
+                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="flex-1 h-12 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/5 transition-all">Discard</Button>
+                 <Button type="submit" className="flex-2 h-12 bg-internationalBank hover:bg-internationalBank text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg transition-all px-8">
+                    <Send className="h-4 w-4 mr-2" />
+                    Authorize Transfer
+                 </Button>
+              </div>
+           </form>
         </ScrollArea>
       </DialogContent>
     </Dialog>

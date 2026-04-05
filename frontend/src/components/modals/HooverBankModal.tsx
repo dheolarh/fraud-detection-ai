@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bell, Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Send, Bell, Lock, Eye, EyeOff, AlertTriangle, ShieldCheck, User, LogOut, MapPin, Loader2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { TransactionCategory, HooverNotification } from '@/types/transaction';
@@ -16,8 +16,8 @@ import { formatCurrency } from '@/utils/currency';
 import { CountryDropdown } from '@/components/ui/CountryDropdown';
 import { AccountGenerator } from '@/components/ui/AccountGenerator';
 import { useAccountBalance } from '@/hooks/useData';
+import { cn } from '@/lib/utils';
 
-// Transaction categories
 const categories: TransactionCategory[] = ['Shopping', 'Bills', 'Transfer', 'Salary', 'Entertainment', 'Food', 'Travel', 'Healthcare', 'Other'];
 
 interface HooverBankModalProps {
@@ -28,29 +28,17 @@ interface HooverBankModalProps {
   isAccountFrozen: boolean;
 }
 
-// Mock credentials
-const VALID_CREDENTIALS = {
-  username: 'hoover_admin',
-  password: 'hoover123'
-};
-
 type TabType = 'send' | 'notifications';
 
 export function HooverBankModal({ open, onOpenChange, notifications = [], onSendTransaction, isAccountFrozen }: HooverBankModalProps) {
-  // Fixed HooverBank user identity
   const HOOVER_USER_ID = 'HOV-2426-1226';
   const HOOVER_USER_NAME = 'John Steward';
-
-  // Fixed bank details (UK Bank)
   const BANK_CURRENCY = 'GBP';
   const BANK_COUNTRY = 'United Kingdom';
 
   const { accountBalance } = useAccountBalance(HOOVER_USER_ID);
-
-  // Get user's current location from IP/VPN (for transaction tracking only)
   const { location: userLocation, isLoading: locationLoading } = useUserLocation();
 
-  // Login state
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +46,6 @@ export function HooverBankModal({ open, onOpenChange, notifications = [], onSend
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('send');
 
-  // Transaction details
   const [destinationCountry, setDestinationCountry] = useState('');
   const [destinationCurrency, setDestinationCurrency] = useState('USD');
   const [receiverName, setReceiverName] = useState('');
@@ -70,396 +57,255 @@ export function HooverBankModal({ open, onOpenChange, notifications = [], onSend
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-
     try {
-      // Call banking backend API for authentication
       const response = await fetch('http://localhost:8001/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          password,
-          device_id: `browser_${Date.now()}`, // Generate device ID
-          location: userLocation // Send user's detected location
-        }),
+        body: JSON.stringify({ username, password, device_id: `browser_${Date.now()}`, location: userLocation }),
       });
-
       if (response.ok) {
         const data = await response.json();
         setIsLoggedIn(true);
-        toast.success('Welcome to Hoover Bank');
-        // Store token if needed
+        toast.success('Access Granted', { description: `Welcome back, ${HOOVER_USER_NAME}` });
         localStorage.setItem('hoover_token', data.token);
       } else {
         const error = await response.json();
-        setLoginError(error.detail || 'Invalid username or password');
-        toast.error('Login failed');
+        setLoginError(error.detail || 'Access Denied: Invalid Credentials');
+        toast.error('Authentication Failed');
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      setLoginError('Connection error. Please try again.');
-      toast.error('Connection error');
-    }
+    } catch (error) { setLoginError('Matrix Connection Offline'); toast.error('Connection error'); }
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUsername('');
-    setPassword('');
-    setLoginError('');
-    setActiveTab('send');
-    toast.info('Logged out of Hoover Bank');
+    setIsLoggedIn(false); setUsername(''); setPassword(''); setLoginError(''); setActiveTab('send');
+    toast.info('Session Terminated');
   };
 
   const handleSendTransaction = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!destinationCountry) { toast.error('Select Destination'); return; }
+    if (!receiverName || !receiverId) { toast.error('Generate Receiver'); return; }
+    if (amount <= 0) { toast.error('Invalid Amount'); return; }
 
-    // Validation
-    if (!destinationCountry) {
-      toast.error('Please select a destination country');
-      return;
-    }
-    if (!receiverName || !receiverId) {
-      toast.error('Please generate receiver details');
-      return;
-    }
-    if (amount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-
-    // Create transaction data
     const transactionData = {
-      sender_id: HOOVER_USER_ID,
-      sender_name: HOOVER_USER_NAME,
-      receiver_id: receiverId,
-      receiver_name: receiverName,
-      amount: amount,
-      currency: BANK_CURRENCY,  // Always GBP for UK bank
-      category: category,
-      location: destinationCountry,  // Destination country (where money is going)
-      narration: narration || `Transfer to ${receiverName}`,
-      transaction_flow: 'outgoing'  // Outgoing from HooverBank
+      sender_id: HOOVER_USER_ID, sender_name: HOOVER_USER_NAME, receiver_id: receiverId, receiver_name: receiverName,
+      amount, currency: BANK_CURRENCY, location: destinationCountry, narration: narration || `Transfer to ${receiverName}`,
+      transaction_flow: 'outgoing'
     };
-
     onSendTransaction(transactionData);
-
-    toast.success('Transaction sent successfully', {
-      description: `${formatCurrency(amount, BANK_CURRENCY)} to ${receiverName}`,
-    });
-
-    // Reset form
-    setAmount(0);
-    setNarration('');
-    // Keep destination and receiver details (they might be locked)
+    setAmount(0); setNarration('');
   };
 
   const handleClose = (openState: boolean) => {
-    if (!openState) {
-      // Auto logout when closing modal
-      setIsLoggedIn(false);
-      setUsername('');
-      setPassword('');
-      setLoginError('');
-      setActiveTab('send');
-    }
+    if (!openState) { setIsLoggedIn(false); setUsername(''); setPassword(''); setLoginError(''); setActiveTab('send'); }
     onOpenChange(openState);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 mb-2">
-              <img src={hooverLogo} alt="Hoover Bank" className="h-10 w-auto" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <DialogTitle className="text-hoover">Hoover Bank</DialogTitle>
-                  <span className="text-xs text-muted-foreground">
-                    {BANK_COUNTRY} • {BANK_CURRENCY}
-                  </span>
-                </div>
-                {isLoggedIn ? (
-                  <DialogDescription className="text-xs space-y-1">
+      <DialogContent className="max-w-md max-h-[90vh] glass-panel border-white/10 p-0 overflow-hidden shadow-2xl flex flex-col">
+        <div className="p-6 bg-white/[0.02] border-b border-white/5">
+           <DialogHeader>
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-hoover/10 flex items-center justify-center border border-hoover/20 shadow-inner">
+                       <img src={hooverLogo} alt="Hoover Bank" className="h-7 w-auto object-contain" />
+                    </div>
                     <div>
-                      <span className="font-mono font-medium">{HOOVER_USER_ID}</span>
-                      <span className="mx-1">•</span>
-                      <span className="font-medium">{HOOVER_USER_NAME}</span>
+                       <DialogTitle className="text-xl font-bold font-display uppercase tracking-widest text-white">Hoover Bank</DialogTitle>
+                       <DialogDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 pt-1">
+                          {BANK_COUNTRY} • {BANK_CURRENCY} CORE
+                       </DialogDescription>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        {locationLoading ? 'Detecting location...' : `Current Location: ${userLocation}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 font-semibold">
-                      Balance: {formatCurrency(accountBalance, BANK_CURRENCY)}
-                    </div>
-                  </DialogDescription>
-                ) : (
-                  <DialogDescription>Login to access your account</DialogDescription>
-                )}
+                 </div>
+                 {isLoggedIn && (
+                   <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8 rounded-full hover:bg-red-500/10 hover:text-red-400 transition-all">
+                      <LogOut className="h-4 w-4" />
+                   </Button>
+                 )}
               </div>
-            </div>
-          </div>
-        </DialogHeader>
+           </DialogHeader>
+        </div>
 
         {!isLoggedIn ? (
-          <form onSubmit={handleLogin} className="space-y-4 py-4">
-            <div className="flex items-center justify-center mb-6">
-              <div className="bg-hoover/10 p-4 rounded-full">
-                <Lock className="h-8 w-8 text-hoover" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm">Username</Label>
-              <Input
-                id="username"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            {loginError && (
-              <p className="text-sm text-destructive text-center">{loginError}</p>
-            )}
-
-            <Button type="submit" className="w-full bg-hoover hover:bg-hoover-secondary text-primary-foreground">
-              <Lock className="h-4 w-4 mr-2" />
-              Login to Hoover Bank
-            </Button>
-
-            <p className="text-xs text-muted-foreground text-center pt-2">
-              Demo credentials: hoover_admin / hoover123
-            </p>
+          <form onSubmit={handleLogin} className="px-8 py-6 space-y-5">
+             <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                   <div className="absolute inset-0 bg-hoover/20 blur-2xl rounded-full" />
+                   <div className="relative h-16 w-16 rounded-3xl bg-hoover/10 border border-hoover/20 flex items-center justify-center shadow-inner">
+                      <Lock className="h-6 w-6 text-hoover" />
+                   </div>
+                </div>
+                <div className="text-center">
+                   <h3 className="text-lg font-bold font-display text-white uppercase tracking-wider">Vault Access</h3>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Authorize session</p>
+                </div>
+             </div>
+ 
+             <div className="space-y-3.5">
+                <div className="space-y-1.5">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Registry Username</Label>
+                   <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="john_steward" className="h-10 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl font-bold transition-all text-xs text-white" />
+                </div>
+                <div className="space-y-1.5">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Encryption Key</Label>
+                   <div className="relative group">
+                      <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="h-10 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl font-bold transition-all pr-10 text-xs text-white" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-white transition-colors">
+                         {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                   </div>
+                </div>
+             </div>
+ 
+             {loginError && <p className="text-[10px] font-black uppercase tracking-widest text-center text-red-400 bg-red-400/5 py-2 rounded-lg border border-red-400/10">{loginError}</p>}
+ 
+             <Button type="submit" className="w-full h-11 bg-hoover hover:bg-hoover text-white text-[11px] font-black uppercase tracking-widest rounded-xl shadow-lg transition-all">
+                Authorize Session
+             </Button>
+ 
+             <div className="p-3 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center">
+                <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 italic">Demo: john_steward / password</p>
+             </div>
           </form>
         ) : (
-          <div className="relative space-y-4">
-            {/* Disable interaction when account is frozen */}
-            <div className={isAccountFrozen && isLoggedIn ? 'pointer-events-none' : ''}>
-              {/* Tab Buttons */}
-              <div className="flex gap-2 p-1 bg-muted rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('send')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'send'
-                    ? 'bg-background text-hoover shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  <Send className="h-4 w-4" />
-                  Send Transaction
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('notifications')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'notifications'
-                    ? 'bg-background text-hoover shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  <Bell className="h-4 w-4" />
-                  Notifications
-                  {notifications.length > 0 && (
-                    <Badge variant="secondary" className="text-xs ml-1">{notifications.length}</Badge>
-                  )}
-                </button>
-              </div>
-
-              {/* Tab Content */}
-              {activeTab === 'send' ? (
-                <ScrollArea className="h-[400px] pr-4">
-                  <form onSubmit={handleSendTransaction} className="space-y-4 mx-4 mt-4">
-                    {/* Destination Country */}
-                    <div className="space-y-2">
-                      <Label className="text-sm">Destination Country</Label>
-                      <CountryDropdown
-                        value={destinationCountry}
-                        onChange={(country, currency) => {
-                          setDestinationCountry(country);
-                          setDestinationCurrency(currency);
-                        }}
-                        placeholder="Select destination country"
-                      />
-                    </div>
-
-                    {/* Receiver Name */}
-                    <AccountGenerator
-                      type="name"
-                      prefix="EXT"
-                      value={receiverName}
-                      onChange={setReceiverName}
-                      label="Receiver Name"
-                    />
-
-                    {/* Receiver ID */}
-                    <AccountGenerator
-                      type="account"
-                      prefix="EXT"
-                      value={receiverId}
-                      onChange={setReceiverId}
-                      label="Receiver Account ID"
-                    />
-
-                    {/* Amount */}
-                    <div className="space-y-2">
-                      <Label htmlFor="amount" className="text-sm">Amount ({BANK_CURRENCY})</Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={amount || ''}
-                        onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Available: {formatCurrency(accountBalance, BANK_CURRENCY)}
-                      </p>
-                    </div>
-
-                    {/* Category */}
-                    <div className="space-y-2">
-                      <Label htmlFor="category" className="text-sm">Category</Label>
-                      <Select
-                        value={category}
-                        onValueChange={(value) => setCategory(value as TransactionCategory)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Narration (Optional) */}
-                    <div className="space-y-2">
-                      <Label htmlFor="narration" className="text-sm">Narration (Optional)</Label>
-                      <Input
-                        id="narration"
-                        placeholder="Enter transaction description"
-                        value={narration}
-                        onChange={(e) => setNarration(e.target.value)}
-                        maxLength={100}
-                      />
-                    </div>
-
-                    <Button type="submit" className="w-full bg-hoover hover:bg-hoover-secondary text-primary-foreground">
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Transaction
-                    </Button>
-                  </form>
-                </ScrollArea>
-              ) : (
-                <ScrollArea className="h-[320px] scrollbar-thin mt-4">
-                  {notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                      <Bell className="h-8 w-8 mb-2 opacity-50" />
-                      <p className="text-sm">No incoming transactions</p>
-                      <p className="text-xs">Transactions from International Bank will appear here</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`p-3 rounded-lg border ${notification.read ? 'bg-muted/50' : 'bg-hoover/5 border-hoover/20'
-                            }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <Badge variant="outline" className="text-xs">
-                              {notification.transaction.category}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(notification.receivedAt), 'HH:mm')}
-                            </span>
-                          </div>
-                          <p className="text-sm font-medium">
-                            {formatCurrency(notification.transaction.amount, BANK_CURRENCY)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            From: {notification.transaction.senderId} • {notification.transaction.location}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
-              )}
-            </div>
-
-            {/* Frozen Account Overlay */}
-            {isAccountFrozen && isLoggedIn && (
-              <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/80">
-                <div className="bg-card border-2 border-destructive rounded-lg p-4 shadow-2xl max-w-xs mx-4">
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="bg-destructive/10 p-3 rounded-full">
-                      <AlertTriangle className="h-8 w-8 text-destructive" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <h3 className="text-base font-bold text-destructive">Account Frozen</h3>
-                      <p className="text-xs text-muted-foreground">
-                        Your account has been frozen. Please contact support for assistance.
-                      </p>
-                    </div>
-
-                    <div className="w-full space-y-2 text-left bg-muted/50 p-3 rounded-lg">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-foreground">Support Email</p>
-                        <p className="text-sm text-hoover font-mono">support@hooverbank.com</p>
+          <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+             {/* Floating User Details Card */}
+             <div className="mx-6 mt-4 mb-2 p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-5 shadow-inner flex-shrink-0">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 border border-white/5 flex items-center justify-center p-0.5">
+                         <div className="h-full w-full rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                            <User className="h-5 w-5 text-primary/60" />
+                         </div>
                       </div>
-
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-foreground">Support Number</p>
-                        <p className="text-sm text-hoover font-mono">+1 (800) 555-0199</p>
+                      <div>
+                         <p className="text-sm font-bold font-display text-white">{HOOVER_USER_NAME}</p>
+                         <p className="text-[10px] font-mono text-muted-foreground/60">{HOOVER_USER_ID}</p>
                       </div>
-
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-foreground">Support Address</p>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          123 Banking Street<br />
-                          Financial District<br />
-                          New York, NY 10005
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 mb-0.5">Balance</p>
+                      <p className="text-lg font-bold font-display text-glow-blue">{formatCurrency(accountBalance, BANK_CURRENCY)}</p>
+                   </div>
                 </div>
-              </div>
-            )}
+
+                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 px-1 border-t border-white/5 pt-4">
+                   <div className="flex items-center gap-2">
+                      <MapPin className="h-3 w-3" />
+                      {locationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : userLocation}
+                   </div>
+                   <div className="flex items-center gap-2 text-emerald-500/80">
+                      <ShieldCheck className="h-3 w-3" />
+                      SECURED NODE
+                   </div>
+                </div>
+
+                <div className="flex gap-2 p-1 bg-black/20 border border-white/5 rounded-xl">
+                   <button onClick={() => setActiveTab('send')} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'send' ? 'bg-primary text-black shadow-lg' : 'text-muted-foreground hover:bg-white/5'}`}>
+                      <Send className="h-3.5 w-3.5" />
+                      Dispatch
+                   </button>
+                   <button onClick={() => setActiveTab('notifications')} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'notifications' ? 'bg-primary text-black shadow-lg' : 'text-muted-foreground hover:bg-white/5'}`}>
+                      <Bell className="h-3.5 w-3.5" />
+                      Log Feed
+                      {notifications.length > 0 && <span className="absolute -top-2 -right-1.5 h-5 min-w-[20px] px-1.5 rounded-full bg-red-600 text-white text-[9px] flex items-center justify-center border-2 border-background font-black shadow-lg">{notifications.length}</span>}
+                   </button>
+                </div>
+             </div>
+
+             <div 
+               style={{ height: '420px', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}
+               className="flex-1 px-10 pb-12 scrollbar-none scrollbar-hide rounded-b-2xl mb-6"
+             >
+                <div className={cn("space-y-7 pt-5", isAccountFrozen && "opacity-20 pointer-events-none")}>
+                   {activeTab === 'send' ? (
+                      <form onSubmit={handleSendTransaction} className="space-y-6">
+                         <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Target Territory</Label>
+                            <CountryDropdown value={destinationCountry} onChange={(country, currency) => { setDestinationCountry(country); setDestinationCurrency(currency); }} placeholder="Select Destination" className="h-11 bg-white/5 border-white/5 rounded-xl font-bold" />
+                         </div>
+                         <div className="grid grid-cols-1 gap-4">
+                            <AccountGenerator type="name" prefix="EXT" value={receiverName} onChange={setReceiverName} label="Target Party" />
+                            <AccountGenerator type="account" prefix="EXT" value={receiverId} onChange={setReceiverId} label="Target Registry ID" />
+                         </div>
+                         <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Remit Quantum ({BANK_CURRENCY})</Label>
+                            <div className="relative">
+                               <Wallet className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
+                               <Input type="number" step="0.01" placeholder="0.00" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className="h-11 pl-10 bg-white/5 border-white/5 rounded-xl font-bold font-display text-sm text-white" />
+                            </div>
+                         </div>
+                         <div className="space-y-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Classification</Label>
+                            <Select value={category} onValueChange={(value) => setCategory(value as TransactionCategory)}>
+                               <SelectTrigger className="h-11 bg-white/5 border-white/5 rounded-xl font-bold">
+                                  <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent className="glass-panel border-white/10">
+                                  {categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                         </div>
+                         <Input value={narration} onChange={(e) => setNarration(e.target.value)} placeholder="Audit narration (optional)" className="h-11 bg-white/5 border-white/5 rounded-xl text-xs font-bold text-white mb-2" />
+                         <Button type="submit" className="w-full h-12 bg-hoover hover:bg-hoover text-white text-[11px] font-black uppercase tracking-widest rounded-xl shadow-lg mt-4">
+                            Authorize Disbursement
+                         </Button>
+                      </form>
+                   ) : (
+                      <div className="space-y-4">
+                         {notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                               <Bell className="h-10 w-10 mb-4" />
+                               <p className="text-[10px] font-black uppercase tracking-widest">Steady State: No Feed</p>
+                            </div>
+                         ) : (
+                            notifications.map((not) => (
+                               <div key={not.id} className={`p-4 rounded-2xl border transition-all ${not.read ? 'bg-white/[0.02] border-white/5' : 'bg-hoover/5 border-hoover/20 shadow-[0_0_15px_rgba(255,255,255,0.02)]'}`}>
+                                  <div className="flex items-center justify-between mb-3">
+                                     <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-white/10 ${not.read ? 'text-muted-foreground' : 'text-hoover'}`}>{not.transaction.category}</div>
+                                     <span className="text-[10px] font-bold text-muted-foreground/40 italic">{format(new Date(not.receivedAt), 'HH:mm')}</span>
+                                  </div>
+                                  <p className="text-lg font-bold font-display text-white mb-1">+{formatCurrency(not.transaction.amount, BANK_CURRENCY)}</p>
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{not.transaction.senderId} • {not.transaction.location}</p>
+                               </div>
+                            ))
+                         )}
+                      </div>
+                   )}
+                </div>
+             </div>
+
+             {isAccountFrozen && (
+               <div className="absolute inset-0 z-[100] bg-background/95 backdrop-blur-xl flex items-center justify-center p-8 animate-in fade-in zoom-in duration-500">
+                  <div className="glass-panel border-red-500/30 p-8 rounded-[2rem] shadow-2xl max-w-sm w-full space-y-8 flex flex-col items-center">
+                     <div className="relative">
+                        <div className="absolute inset-0 bg-red-500/20 blur-3xl animate-pulse rounded-full" />
+                        <div className="relative h-20 w-20 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                           <AlertTriangle className="h-10 w-10 text-red-500" />
+                        </div>
+                     </div>
+
+                     <div className="text-center space-y-2">
+                        <h3 className="text-xl font-bold font-display text-red-500 uppercase tracking-widest">Registry Locked</h3>
+                        <p className="text-xs font-bold text-muted-foreground/70 leading-relaxed uppercase tracking-widest px-4">Account restricted due to high-risk behavioral signal.</p>
+                     </div>
+
+                     <div className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 space-y-4">
+                        <div className="space-y-1">
+                           <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">Secure Liaison</p>
+                           <p className="text-sm font-bold font-mono text-white">support@hooverbank.com</p>
+                        </div>
+                        <div className="space-y-1">
+                           <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">Voice Verification</p>
+                           <p className="text-sm font-bold font-mono text-white">+1 (800) 555-0199</p>
+                        </div>
+                     </div>
+
+                     <Button onClick={() => onOpenChange(false)} className="w-full h-12 bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-black uppercase tracking-widest rounded-xl transition-all">Terminate Connection</Button>
+                  </div>
+               </div>
+             )}
           </div>
         )}
       </DialogContent>

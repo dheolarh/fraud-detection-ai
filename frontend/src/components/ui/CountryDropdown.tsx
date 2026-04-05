@@ -12,6 +12,15 @@ interface CountryDropdownProps {
     className?: string;
 }
 
+interface CountryInfo {
+    name: string;
+    currency: string;
+    currencyName: string;
+    flagEmoji: string;
+    cca2: string;
+    region: string;
+}
+
 export function CountryDropdown({
     value,
     onChange,
@@ -22,14 +31,15 @@ export function CountryDropdown({
     const [search, setSearch] = useState('');
 
     // Map countries to useful data
-    const countryData = useMemo(() => {
-        return countries.map((country) => ({
+    const countryData = useMemo<CountryInfo[]>(() => {
+        return countries.map((country: any) => ({
             name: country.name.common,
             currency: country.currencies ? Object.keys(country.currencies)[0] : 'USD',
             currencyName: country.currencies
                 ? Object.values(country.currencies)[0]?.name || 'US Dollar'
                 : 'US Dollar',
-            flag: country.flag,
+            flagEmoji: country.flag,
+            cca2: country.cca2.toLowerCase(),
             region: country.region,
         })).sort((a, b) => a.name.localeCompare(b.name));
     }, []);
@@ -61,35 +71,43 @@ export function CountryDropdown({
             <SelectTrigger className={className}>
                 <SelectValue placeholder={placeholder}>
                     {selectedCountry && (
-                        <span className="flex items-center gap-2">
-                            <span>{selectedCountry.flag}</span>
-                            <span>{selectedCountry.name}</span>
-                            <span className="text-xs text-muted-foreground">({selectedCountry.currency})</span>
+                        <span className="flex items-center gap-3">
+                            <img 
+                                src={`https://flagcdn.com/w40/${selectedCountry.cca2}.png`}
+                                alt=""
+                                className="h-3.5 w-auto rounded-sm object-cover shadow-sm ring-1 ring-white/10"
+                            />
+                            <span className="font-bold">{selectedCountry.name}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">({selectedCountry.currency})</span>
                         </span>
                     )}
                 </SelectValue>
             </SelectTrigger>
-            <SelectContent>
-                <div className="p-2">
+            <SelectContent className="glass-panel border-white/10 p-0 shadow-2xl">
+                <div className="p-3 bg-white/[0.02] border-b border-white/5">
                     <Input
-                        placeholder="Search countries..."
+                        placeholder="Filter database..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="mb-2"
+                        className="h-9 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl text-xs font-bold transition-all"
                     />
                 </div>
-                <ScrollArea className="h-[300px]">
+                <ScrollArea className="h-[280px] scrollbar-hide py-2 px-2">
                     {filteredCountries.length === 0 ? (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                            No countries found
+                        <div className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/30 italic">
+                            No signal matches found
                         </div>
                     ) : (
                         filteredCountries.map((country) => (
-                            <SelectItem key={country.name} value={country.name}>
-                                <div className="flex items-center gap-2">
-                                    <span>{country.flag}</span>
-                                    <span>{country.name}</span>
-                                    <span className="text-xs text-muted-foreground">
+                            <SelectItem key={country.name} value={country.name} className="rounded-xl focus:bg-primary focus:text-black mb-1 p-2">
+                                <div className="flex items-center gap-3">
+                                    <img 
+                                        src={`https://flagcdn.com/w40/${country.cca2}.png`}
+                                        alt=""
+                                        className="h-3 w-4 rounded-[1px] object-cover border border-white/10"
+                                    />
+                                    <span className="text-xs font-bold">{country.name}</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 font-mono ml-auto pr-4">
                                         {country.currency}
                                     </span>
                                 </div>

@@ -9,7 +9,7 @@ import { GeoAnalyticsCard } from '@/components/dashboard/GeoAnalyticsCard';
 import { CaseManagementCard } from '@/components/dashboard/CaseManagementCard';
 import { InternationalBankModal } from '@/components/modals/InternationalBanksModal';
 import { HooverBankModal } from '@/components/modals/HooverBankModal';
-import { BankFormData, HooverNotification } from '@/types/transaction';
+import { HooverNotification } from '@/types/transaction';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useTransactions } from '@/hooks/useData';
@@ -25,16 +25,16 @@ export default function Dashboard() {
 
   // Convert ALL transactions to notifications (both sent and received)
   const hooverNotifications: HooverNotification[] = transactions
-    .filter(tx => tx.sender_id === userId || tx.receiver_id === userId) // Both sent and received
-    .slice(0, 15) //
+    .filter(tx => tx.sender_id === userId || tx.receiver_id === userId)
+    .slice(0, 15)
     .map((tx, index) => ({
       id: tx.transaction_id.toString(),
       transaction: {
         id: tx.transaction_id.toString(),
         senderId: tx.sender_id,
         receiverId: tx.receiver_id,
-        amount: tx.amount_in_bank_currency || tx.amount,  // Use converted amount
-        currency: tx.bank_currency || tx.currency || 'GBP',  // Use bank currency
+        amount: tx.amount_in_bank_currency || tx.amount,
+        currency: tx.bank_currency || tx.currency || 'GBP',
         date: tx.timestamp,
         category: tx.category,
         location: tx.location,
@@ -44,33 +44,27 @@ export default function Dashboard() {
         status: tx.status === 'blocked' ? 'flagged' : 'completed' as const
       },
       receivedAt: tx.timestamp,
-      read: index >= 5 // Mark first 5 as unread
+      read: index >= 5 
     }));
 
   const handleInternationalSend = async (data: any) => {
     try {
-      // Pass through the complete data from the modal
       await api.sendTransaction(data);
-
-      // Success - modal will show toast
     } catch (error: any) {
       toast.error('Transaction Failed', {
         description: error.message || 'Transaction could not be completed'
       });
       console.error('Transaction error:', error);
-      throw error;  // Re-throw so modal knows it failed
+      throw error;
     }
   };
 
   const handleHooverSend = async (data: any) => {
     try {
-      // Pass through the complete data from the modal
       await api.sendTransaction(data);
-
       toast.success('Transaction Sent', {
         description: `Sent successfully`
       });
-
     } catch (error: any) {
       if (error.message.includes('blocked') || error.message.includes('frozen')) {
         toast.error('Transaction Blocked', {
@@ -87,7 +81,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#0A0A0B] relative selection:bg-primary/20 selection:text-primary overflow-x-hidden">
+      {/* Background ambient glows */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full" />
+        <div className="absolute top-[20%] right-[-5%] w-[30%] h-[30%] bg-red-500/5 blur-[100px] rounded-full" />
+        <div className="absolute bottom-[-10%] left-[20%] w-[50%] h-[50%] bg-blue-600/5 blur-[150px] rounded-full" />
+      </div>
+
       <Header
         onOpenInternational={() => setInternationalModalOpen(true)}
         onOpenHoover={() => setHooverModalOpen(true)}
@@ -96,23 +97,23 @@ export default function Dashboard() {
       />
 
       {/* Spacer for fixed header */}
-      <div className="h-20 md:h-24" />
+      <div className="h-24 md:h-28" />
 
-      <main className="container mx-auto p-4 md:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {/* Row 1: Identity, Activity Score, Risk Trend, Geo Analytics */}
-          <IdentityCard />
-          <ActivityScoreCard />
-          <RiskTrendCard />
-          <GeoAnalyticsCard />
+      <main className="container mx-auto px-4 md:px-6 pb-20 relative z-10 max-w-[1440px]">
+        {/* Bento Grid Top Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8 mb-8">
+           <div className="lg:col-span-2">
+              <IdentityCard />
+           </div>
+           <ActivityScoreCard />
+           <RiskTrendCard />
+           <GeoAnalyticsCard />
+        </div>
 
-          {/* Row 2: Real-time Feed (full width) */}
+        {/* Full-Width Components Column */}
+        <div className="space-y-6 md:space-y-10">
           <TransactionFeedCard />
-
-          {/* Row 3: Anomalies (full width) */}
           <AnomaliesCard />
-
-          {/* Row 4: Case Management (full width) */}
           <CaseManagementCard />
         </div>
       </main>

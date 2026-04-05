@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Download, ChevronLeft, ChevronRight, AlertCircle, Filter, X, CalendarIcon } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, AlertCircle, Filter, X, CalendarIcon, ArrowUpRight, ArrowDownLeft, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
@@ -30,27 +30,21 @@ export function TransactionFeedCard() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // Use server-side filtering and pagination
   const direction = directionFilter === 'all' ? undefined : directionFilter;
   const minAmt = minAmount ? parseFloat(minAmount) : undefined;
   const maxAmt = maxAmount ? parseFloat(maxAmount) : undefined;
   const country = countryFilter === 'all' ? undefined : countryFilter;
 
-  // Fetch more transactions when searching or filtering to enable global search
-  // Otherwise use pagination with 20 per page
   const hasSearchOrFilters = Boolean(searchQuery.trim() || dateRange || sortBy !== 'date-desc');
   const fetchLimit = hasSearchOrFilters ? 1000 : 20;
   const pageToFetch = hasSearchOrFilters ? 1 : currentPage;
 
   const { transactions: allTransactions, loading, error } = useTransactions(userId, pageToFetch, direction, minAmt, maxAmt, country, 10000, fetchLimit);
 
-  // Client-side search and date filtering
   const filteredTransactions = useMemo(() => {
     if (!allTransactions) return allTransactions;
-
     let filtered = allTransactions;
 
-    // Search filter - fixed to handle null values
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((t: any) =>
@@ -63,7 +57,6 @@ export function TransactionFeedCard() {
       );
     }
 
-    // Date range filter
     if (dateRange?.from || dateRange?.to) {
       filtered = filtered.filter((t: any) => {
         const txDate = new Date(t.timestamp);
@@ -78,12 +71,10 @@ export function TransactionFeedCard() {
     }
 
     return filtered;
-  }, [allTransactions, searchQuery, dateRange, hasSearchOrFilters, fetchLimit, pageToFetch]);
+  }, [allTransactions, searchQuery, dateRange]);
 
-  // Sorting
   const transactions = useMemo(() => {
     if (!filteredTransactions) return filteredTransactions;
-
     const sorted = [...filteredTransactions];
 
     switch (sortBy) {
@@ -104,9 +95,7 @@ export function TransactionFeedCard() {
     return sorted;
   }, [filteredTransactions, sortBy]);
 
-  // Format currency using transaction's actual currency field
   const formatTransactionAmount = (transaction: any) => {
-    // Use converted amount if available, otherwise use original amount
     const displayAmount = transaction.amount_in_bank_currency || transaction.amount;
     const displayCurrency = transaction.bank_currency || transaction.currency_code || transaction.currency || 'GBP';
 
@@ -119,11 +108,20 @@ export function TransactionFeedCard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-xs">Completed</Badge>;
+        return <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
+          <div className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" />
+          Completed
+        </div>;
       case 'pending':
-        return <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 text-xs">Pending</Badge>;
+        return <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold uppercase tracking-wider">
+          <div className="h-1 w-1 rounded-full bg-amber-400" />
+          Pending
+        </div>;
       case 'flagged':
-        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">Flagged</Badge>;
+        return <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+          <div className="h-1 w-1 rounded-full bg-red-400 animate-ping" />
+          Flagged
+        </div>;
       default:
         return null;
     }
@@ -131,13 +129,7 @@ export function TransactionFeedCard() {
 
   const handleExportCSV = () => {
     const headers = ['ID', 'Sender Name', 'Sender ID', 'Receiver Name', 'Receiver ID', 'Amount', 'Date', 'Location', 'Category', 'Narration', 'Status'];
-    const csvContent = [
-      headers.join(','),
-      ...transactions.map(t =>
-        [t.transaction_id, t.sender_name, t.sender_id, t.receiver_name, t.receiver_id, t.amount, t.timestamp, t.location, t.category, `"${t.narration}"`, t.status].join(',')
-      )
-    ].join('\n');
-
+    const csvContent = [headers.join(','), ...transactions.map(t => [`HOV-${t.transaction_id}`, t.sender_name, t.sender_id, t.receiver_name, t.receiver_id, t.amount, t.timestamp, t.location, t.category, `"${t.narration}"`, t.status].join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -145,27 +137,12 @@ export function TransactionFeedCard() {
     a.download = 'transactions.csv';
     a.click();
     window.URL.revokeObjectURL(url);
-
     toast.success('CSV exported successfully');
   };
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [directionFilter, minAmount, maxAmount, countryFilter, dateRange, sortBy, searchQuery]);
-
-  // Fetch countries list on mount
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const countryList = await api.getCountries(userId);
-        setCountries(countryList);
-      } catch (err) {
-        console.error('Failed to fetch countries:', err);
-      }
-    };
-    fetchCountries();
-  }, [userId]);
 
   const clearFilters = () => {
     setDirectionFilter('all');
@@ -180,179 +157,124 @@ export function TransactionFeedCard() {
   const hasActiveFilters = directionFilter !== 'all' || minAmount || maxAmount || countryFilter !== 'all' || dateRange || sortBy !== 'date-desc';
 
   if (loading) {
-    return (
-      <Card className="card-shadow col-span-1 md:col-span-2 lg:col-span-4">
-        <CardContent className="p-6 text-center text-muted-foreground">
-          Loading transactions...
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="card-shadow col-span-1 md:col-span-2 lg:col-span-4">
-        <CardContent className="p-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Failed to load transactions: {error}
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
+     return (
+        <Card className="glass-panel card-shadow-lg col-span-1 md:col-span-2 lg:col-span-4 animate-pulse">
+           <CardContent className="h-96 flex items-center justify-center">
+              <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground/40">Loading Ledger...</p>
+           </CardContent>
+        </Card>
+     )
   }
 
   return (
-    <Card className="card-shadow col-span-1 md:col-span-2 lg:col-span-4">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col gap-3">
+    <Card className="glass-panel card-shadow-lg col-span-1 md:col-span-2 lg:col-span-4 overflow-hidden border-white/5">
+      <CardHeader className="pb-3 bg-white/[0.01] border-b border-white/5">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold">
-              Transactions Feed
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={handleExportCSV} className="text-xs">
-              <Download className="h-3 w-3 mr-1" />
-              Export CSV
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center border border-white/10">
+                <ArrowUpRight className="h-4 w-4 text-primary/60" />
+              </div>
+              <CardTitle className="text-sm font-bold font-display uppercase tracking-widest text-muted-foreground">
+                Transaction Ledger
+              </CardTitle>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="text-[10px] font-bold uppercase tracking-widest h-8 bg-white/5 border-white/10 hover:bg-white/10 transition-all">
+              <Download className="h-3 w-3 mr-1.5" />
+              Export .CSV
             </Button>
           </div>
 
-          {/* Search and Filter */}
           <div className="flex flex-wrap gap-2 items-center">
-            <Input
-              type="text"
-              placeholder="Search by ID, name, category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-[220px] h-8 text-xs"
-            />
+            <div className="relative group">
+               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+               <Input
+                type="text"
+                placeholder="Search merchant, ID, category..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-[280px] h-9 text-xs pl-8 bg-white/5 border-white/10 focus:bg-white/10 focus:ring-1 focus:ring-primary/20 transition-all rounded-xl"
+              />
+            </div>
 
             <Popover open={filterOpen} onOpenChange={setFilterOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs">
-                  <Filter className="h-3 w-3 mr-1" />
-                  Filters
+                <Button variant="outline" size="sm" className="h-9 text-xs font-bold uppercase tracking-widest bg-white/5 border-white/10 hover:bg-white/10 transition-all rounded-xl px-4">
+                  <Filter className="h-3 w-3 mr-2" />
+                  Filter Suite
                   {hasActiveFilters && (
-                    <Badge variant="secondary" className="ml-2 h-4 px-1 text-[10px]">
+                    <div className="ml-2 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[8px] font-black">
                       {[directionFilter !== 'all', minAmount || maxAmount, countryFilter !== 'all', dateRange, sortBy !== 'date-desc'].filter(Boolean).length}
-                    </Badge>
+                    </div>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80" align="start">
+              <PopoverContent className="w-80 glass-panel border-white/10 shadow-2xl p-4 rounded-2xl" align="start">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-sm">Filters</h4>
+                  <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                    <h4 className="font-bold font-display text-xs uppercase tracking-widest">Filter Analytics</h4>
                     {hasActiveFilters && (
-                      <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 text-xs">
-                        <X className="h-3 w-3 mr-1" />
-                        Clear All
+                      <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 text-[10px] uppercase font-black hover:text-red-400">
+                        Reset All
                       </Button>
                     )}
                   </div>
 
-                  {/* Direction Filter */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium">Direction</label>
-                    <Select value={directionFilter} onValueChange={setDirectionFilter}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Transactions</SelectItem>
-                        <SelectItem value="incoming">Incoming</SelectItem>
-                        <SelectItem value="outgoing">Outgoing</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Amount Range */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium">Amount Range</label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        placeholder="Min"
-                        value={minAmount}
-                        onChange={(e) => setMinAmount(e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                      <span className="text-xs text-muted-foreground">to</span>
-                      <Input
-                        type="number"
-                        placeholder="Max"
-                        value={maxAmount}
-                        onChange={(e) => setMaxAmount(e.target.value)}
-                        className="h-8 text-xs"
-                      />
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Flow Direction</label>
+                      <Select value={directionFilter} onValueChange={setDirectionFilter}>
+                        <SelectTrigger className="h-9 text-xs bg-white/5 border-white/5 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="glass-panel border-white/10">
+                          <SelectItem value="all">Global Matrix</SelectItem>
+                          <SelectItem value="incoming">Inward Flow</SelectItem>
+                          <SelectItem value="outgoing">Outward Flow</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
 
-                  {/* Country Filter */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium">Country</label>
-                    <CountryDropdown
-                      value={countryFilter === 'all' ? '' : countryFilter}
-                      onChange={(country, currency) => setCountryFilter(country || 'all')}
-                      placeholder="All Countries"
-                      className="h-8 text-xs"
-                    />
-                  </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Monetary Threshold</label>
+                      <div className="flex items-center gap-2">
+                        <Input type="number" placeholder="Min" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} className="h-9 text-xs bg-white/5 border-white/5 rounded-xl" />
+                        <div className="h-px w-3 bg-white/10" />
+                        <Input type="number" placeholder="Max" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} className="h-9 text-xs bg-white/5 border-white/5 rounded-xl" />
+                      </div>
+                    </div>
 
-                  {/* Date Range */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium">Date Range</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal h-8 text-xs",
-                            !dateRange && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-3 w-3" />
-                          {dateRange?.from ? (
-                            dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd, y")}
-                              </>
-                            ) : (
-                              format(dateRange.from, "MMM dd, y")
-                            )
-                          ) : (
-                            <span>Pick a date range</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          initialFocus
-                          mode="range"
-                          defaultMonth={dateRange?.from}
-                          selected={dateRange}
-                          onSelect={setDateRange}
-                          numberOfMonths={2}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Temporal Window</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-medium h-9 text-xs bg-white/5 border-white/5 rounded-xl", !dateRange && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-3.5 w-3.5 text-primary/60" />
+                            {dateRange?.from ? (
+                              dateRange.to ? <>{format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd, y")}</> : format(dateRange.from, "MMM dd, y")
+                            ) : <span>Select Range</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 glass-panel border-white/10" align="start">
+                          <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} className="rounded-xl border-none" />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-                  {/* Sort By */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium">Sort By</label>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="date-desc">Date (Newest First)</SelectItem>
-                        <SelectItem value="date-asc">Date (Oldest First)</SelectItem>
-                        <SelectItem value="amount-desc">Amount (High to Low)</SelectItem>
-                        <SelectItem value="amount-asc">Amount (Low to High)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Ordering Strategy</label>
+                      <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="h-9 text-xs bg-white/5 border-white/5 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="glass-panel border-white/10">
+                          <SelectItem value="date-desc">Newest First</SelectItem>
+                          <SelectItem value="date-asc">Oldest First</SelectItem>
+                          <SelectItem value="amount-desc">Highest Value</SelectItem>
+                          <SelectItem value="amount-asc">Lowest Value</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </PopoverContent>
@@ -360,73 +282,78 @@ export function TransactionFeedCard() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="h-[280px] overflow-y-auto overflow-x-auto">
-          <Table className="min-w-[600px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">ID</TableHead>
-                <TableHead className="text-xs">Sender Name</TableHead>
-                <TableHead className="text-xs">Sender ID</TableHead>
-                <TableHead className="text-xs">Receiver Name</TableHead>
-                <TableHead className="text-xs">Receiver ID</TableHead>
-                <TableHead className="text-xs">Amount</TableHead>
-                <TableHead className="text-xs">Date (UTC)</TableHead>
-                <TableHead className="text-xs">Location</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
+      <CardContent className="p-0">
+        <div className="max-h-[400px] overflow-y-auto scrollbar-thin">
+          <Table className="relative">
+            <TableHeader className="sticky top-0 bg-background/80 backdrop-blur-md z-20">
+              <TableRow className="border-b border-white/5 hover:bg-transparent">
+                <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 pl-6">Identifier</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest h-12">Merchant / Party</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest h-12 text-right pr-6">Value / Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {transactions && transactions.map((transaction: any) => (
-                <TableRow key={transaction.transaction_id} className="text-xs">
-                  <TableCell className="font-mono text-xs">{transaction.transaction_id}</TableCell>
-                  <TableCell className="max-w-[120px] truncate">{transaction.sender_name || 'N/A'}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{transaction.sender_id}</TableCell>
-                  <TableCell className="max-w-[120px] truncate">{transaction.receiver_name || 'N/A'}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{transaction.receiver_id}</TableCell>
-                  <TableCell className={`font-medium ${transaction.transaction_flow === 'incoming' ? 'text-success' : 'text-destructive'
-                    }`}>
-                    {formatTransactionAmount(transaction)}
+                <TableRow key={transaction.transaction_id} className="border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors group">
+                  <TableCell className="pl-6 py-4">
+                     <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-bold font-display text-white">HOV-{transaction.transaction_id}</span>
+                        <span className="text-[10px] font-mono text-muted-foreground/60">{format(new Date(transaction.timestamp), 'MMM dd, HH:mm')}</span>
+                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {format(new Date(transaction.timestamp), 'MMM dd, HH:mm')}
+                  <TableCell className="py-4">
+                     <div className="flex items-center gap-3">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center border border-white/5 ${transaction.transaction_flow === 'incoming' ? 'bg-emerald-500/5 text-emerald-400' : 'bg-red-500/5 text-red-400'}`}>
+                           {transaction.transaction_flow === 'incoming' ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                           <span className="text-xs font-bold text-gray-200 truncate max-w-[200px]">{transaction.receiver_name || transaction.sender_name || 'System Settlement'}</span>
+                           <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{transaction.category}</span>
+                              <div className="w-1 h-1 rounded-full bg-white/10" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{transaction.location}</span>
+                           </div>
+                        </div>
+                     </div>
                   </TableCell>
-                  <TableCell>{transaction.location}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs">{transaction.category}</Badge>
+                  <TableCell className="text-right pr-6 py-4">
+                     <div className="flex flex-col items-end gap-1.5">
+                        <span className={`text-sm font-bold font-display ${transaction.transaction_flow === 'incoming' ? 'text-emerald-400' : 'text-white'}`}>
+                           {transaction.transaction_flow === 'incoming' ? '+' : '-'}{formatTransactionAmount(transaction)}
+                        </span>
+                        {getStatusBadge(transaction.status || 'completed')}
+                     </div>
                   </TableCell>
-                  <TableCell>{getStatusBadge(transaction.status || 'completed')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-xs text-muted-foreground">
-            {hasSearchOrFilters && transactions ? `Showing ${transactions.length} results` : ''}
+        {/* Improved Pagination Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-white/[0.01]">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+            {hasSearchOrFilters && transactions ? `${transactions.length} Entires Synced` : `Registry: Page ${currentPage}`}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1 || hasSearchOrFilters}
-              className="h-8 text-xs"
+              className="h-8 w-8 p-0 bg-white/5 border-white/5 hover:bg-white/10 disabled:opacity-20 rounded-lg"
             >
               <ChevronLeft className="h-3 w-3" />
             </Button>
-            <span className="text-xs text-muted-foreground">
-              {hasSearchOrFilters ? 'All Results' : `Page ${currentPage}`}
-            </span>
+            <div className="h-8 px-3 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+               <span className="text-xs font-bold text-primary">{currentPage}</span>
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(p => p + 1)}
               disabled={!transactions || transactions.length < 20 || hasSearchOrFilters}
-              className="h-8 text-xs"
+              className="h-8 w-8 p-0 bg-white/5 border-white/5 hover:bg-white/10 disabled:opacity-20 rounded-lg"
             >
               <ChevronRight className="h-3 w-3" />
             </Button>

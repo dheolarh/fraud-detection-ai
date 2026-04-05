@@ -158,7 +158,9 @@ async def get_transactions(
             "offset": offset
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}")
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}\n\nTRACEBACK:\n{tb}")
 
 
 @router.get("/users/{user_id}")
@@ -239,8 +241,8 @@ async def get_transaction_stats(
         incoming_txns = [t for t in transactions if t.transaction_flow == 'incoming']
         outgoing_txns = [t for t in transactions if t.transaction_flow == 'outgoing']
         
-        total_incoming = sum(float(t.amount) for t in incoming_txns)
-        total_outgoing = sum(float(t.amount) for t in outgoing_txns)
+        total_incoming = sum(float(t.amount_in_bank_currency) for t in incoming_txns)
+        total_outgoing = sum(float(t.amount_in_bank_currency) for t in outgoing_txns)
         
         # Category frequency
         category_counts = {}

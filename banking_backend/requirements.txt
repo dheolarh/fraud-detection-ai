@@ -14,6 +14,9 @@ pydantic==2.5.0
 # Utilities
 python-dotenv==1.0.0
 requests==2.32.5
+pycountry==22.3.5
+forex-python==1.8
+
 
 # Logging
 loguru==0.7.2

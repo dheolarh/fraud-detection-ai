@@ -90,10 +90,9 @@ def _save_fraud_decision(
     from storage.database import SessionLocal
     from storage.models import FraudDecision
 
-    if verdict not in ["MONITORED", "FLAGGED"]:
-        logger.info(f"Transaction {transaction_id} approved - not saving to fraud_decisions")
-        return
-
+    # We now save ALL decisions (including APPROVED) to ensure the 
+    # dashboard can calculate accurate risk trends and sample sizes.
+    
     save_db = SessionLocal()
     try:
         fraud_decision = FraudDecision(

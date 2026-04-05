@@ -53,7 +53,7 @@ class RiskOrchestrator:
         ]
     
     async def analyze_transaction(
-        self, transaction: Dict[str, Any], db_session: Session
+        self, transaction: Dict[str, Any], db_session: Session, skip_ml: bool = False
     ) -> Tuple[float, List[str], str, str]:
         """
         Analyze transaction through all fraud detection logics + ML.
@@ -95,23 +95,27 @@ class RiskOrchestrator:
         ml_explanation = ""
         ml_triggered = False
         
-        try:
-            from intelligence.anomaly_detector import MLAnomalyDetector
-            
-            user_id = transaction.get('sender_id') or transaction.get('receiver_id')
-            if user_id:
-                detector = MLAnomalyDetector(user_id)
-                if detector.load_models():
-                    ml_result = detector.detect_transaction_anomaly(transaction)
-                    ml_score = ml_result['anomaly_score']
-                    ml_triggered = ml_result['is_anomaly']
-                    ml_explanation = ml_result['explanation']
-                    logger.info(f"ML detection: score={ml_score}, triggered={ml_triggered}")
-        except Exception as e:
-            logger.warning(f"ML detection failed: {e}")
+        if not skip_ml:
+            try:
+                from intelligence.anomaly_detector import MLAnomalyDetector
+                
+                user_id = transaction.get('sender_id') or transaction.get('receiver_id')
+                if user_id:
+                    detector = MLAnomalyDetector(user_id)
+                    if detector.load_models():
+                        ml_result = detector.detect_transaction_anomaly(transaction)
+                        ml_score = ml_result['anomaly_score']
+                        ml_triggered = ml_result['is_anomaly']
+                        ml_explanation = ml_result['explanation']
+                        logger.info(f"ML detection: score={ml_score}, triggered={ml_triggered}")
+            except Exception as e:
+                logger.warning(f"ML detection failed: {e}")
         
         # Combine scores: 60% rule-based, 40% ML
-        final_score = (rule_based_score * 0.6) + (ml_score * 0.4)
+        if skip_ml:
+            final_score = rule_based_score
+        else:
+            final_score = (rule_based_score * 0.6) + (ml_score * 0.4)
         
         # Check hard stops (using bucket scores)
         verdict, reason = self._check_hard_stops(bucket_scores, final_score)

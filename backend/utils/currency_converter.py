@@ -67,6 +67,9 @@ class CurrencyConverter:
     _cache_timestamp: Optional[datetime] = None
     _cache_ttl = timedelta(hours=1)
     
+    # Toggle for live rates (set to False for speed/testing)
+    use_live_rates = True
+    
     # Currency rates instance
     _currency_rates = CurrencyRates() if FOREX_AVAILABLE else None
     
@@ -76,7 +79,7 @@ class CurrencyConverter:
         Get live exchange rate for currency (to USD).
         Returns None if unavailable.
         """
-        if not FOREX_AVAILABLE or not cls._currency_rates:
+        if not cls.use_live_rates or not FOREX_AVAILABLE or not cls._currency_rates:
             return None
         
         try:

@@ -254,6 +254,9 @@ class LoginIntegrityLogic(BaseFraudLogic):
         except Exception as e:
             return 0.0
 
+    # Toggle for external API calls (set to False for speed)
+    use_external_apis = False
+
     def _calculate_distance(self, location1: str, location2: str) -> float:
         """
         Calculate distance between two locations using geopy library.
@@ -265,6 +268,9 @@ class LoginIntegrityLogic(BaseFraudLogic):
         Returns:
             float: Distance in kilometers
         """
+        if not self.use_external_apis:
+            return 0.0
+
         try:
             from geopy.geocoders import Nominatim
             from geopy.distance import geodesic

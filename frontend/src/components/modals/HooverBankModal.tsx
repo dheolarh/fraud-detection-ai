@@ -88,8 +88,15 @@ export function HooverBankModal({ open, onOpenChange, notifications = [], onSend
     if (amount <= 0) { toast.error('Invalid Amount'); return; }
 
     const transactionData = {
-      sender_id: HOOVER_USER_ID, sender_name: HOOVER_USER_NAME, receiver_id: receiverId, receiver_name: receiverName,
-      amount, currency: BANK_CURRENCY, location: destinationCountry, narration: narration || `Transfer to ${receiverName}`,
+      sender_id: HOOVER_USER_ID, 
+      sender_name: HOOVER_USER_NAME, 
+      receiver_id: receiverId, 
+      receiver_name: receiverName,
+      amount, 
+      currency: BANK_CURRENCY, 
+      category: category,
+      location: destinationCountry, 
+      narration: narration || `Transfer to ${receiverName}`,
       transaction_flow: 'outgoing'
     };
     onSendTransaction(transactionData);

@@ -201,7 +201,7 @@ export function AnomaliesCard() {
           </div>
 
           {selectedAnomaly && (
-            <div className="p-6 space-y-8 bg-white/[0.02]">
+            <div className="px-6 pb-6 pt-2 space-y-6">
               <div className="grid grid-cols-2 gap-6 pb-2">
                 <div className="space-y-1">
                   <p className="text-muted-foreground text-[10px] font-black uppercase tracking-widest">Signal Identifier</p>
@@ -224,7 +224,6 @@ export function AnomaliesCard() {
               </div>
 
               <div className="relative group">
-                 <div className="absolute inset-0 bg-white/5 blur-xl group-hover:bg-white/10 transition-all rounded-3xl" />
                  <div className="relative p-5 glass-panel rounded-2xl border-white/5 space-y-4">
                     <div className="flex items-center justify-between border-b border-white/5 pb-3">
                        <div className="flex items-center gap-2">
@@ -235,9 +234,14 @@ export function AnomaliesCard() {
                           {selectedAnomaly.risk_score}% Severity
                        </Badge>
                     </div>
-                    <p className="text-sm text-gray-200 leading-relaxed font-bold italic opaity-90">
-                       " {selectedAnomaly.explanation_text || 'Automated detection flagged this sequence as highly irregular relative to established behavioral patterns.'} "
-                    </p>
+                    <div 
+                      style={{ maxHeight: '120px', overflowY: 'auto' }}
+                      className="scrollbar-hide"
+                    >
+                      <p className="text-sm text-gray-200 leading-relaxed font-bold italic opaity-90">
+                         " {selectedAnomaly.explanation_text || 'Automated detection flagged this sequence as highly irregular relative to established behavioral patterns.'} "
+                      </p>
+                    </div>
                  </div>
               </div>
 

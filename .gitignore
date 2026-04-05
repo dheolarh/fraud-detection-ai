@@ -54,3 +54,5 @@ backend/.env
 # Script
 *.json
 start_backends.sh
+*.ps1
+*.bat

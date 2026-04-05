@@ -111,7 +111,7 @@ export function InternationalBankModal({ open, onOpenChange, onSendTransaction }
 
               <div className="space-y-4 pt-2">
                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Origin Node</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Sender's Country</Label>
                     <CountryDropdown
                       value={senderCountry}
                       onChange={(country, currency) => { setSenderCountry(country); setSenderCurrency(currency); }}
@@ -121,12 +121,12 @@ export function InternationalBankModal({ open, onOpenChange, onSendTransaction }
                  </div>
 
                  <div className="grid grid-cols-1 gap-4">
-                    <AccountGenerator type="name" prefix="INT" value={senderName} onChange={setSenderName} label="Originator Designation" />
-                    <AccountGenerator type="account" prefix="INT" value={senderId} onChange={setSenderId} label="Originating Registry ID" />
+                    <AccountGenerator type="name" prefix="INT" value={senderName} onChange={setSenderName} label="Sender's Name" />
+                    <AccountGenerator type="account" prefix="INT" value={senderId} onChange={setSenderId} label="Sender's Account Number" />
                  </div>
 
                  <div className="space-y-2">
-                    <Label htmlFor="amount" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Quantum Value {senderCurrency ? `(${senderCurrency})` : ''}</Label>
+                    <Label htmlFor="amount" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Amount ({senderCurrency ? `(${senderCurrency})` : ''})</Label>
                     <div className="relative group">
                        <Wallet className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                        <Input id="amount" type="number" step="0.01" placeholder="0.00" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className="h-11 pl-10 bg-white/5 border-white/5 focus:bg-white/10 rounded-xl font-bold font-display text-sm transition-all" />

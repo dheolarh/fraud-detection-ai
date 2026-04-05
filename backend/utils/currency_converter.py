@@ -67,8 +67,8 @@ class CurrencyConverter:
     _cache_timestamp: Optional[datetime] = None
     _cache_ttl = timedelta(hours=1)
     
-    # Toggle for live rates (set to False for speed/testing)
-    use_live_rates = True
+    # Toggle for live rates — set to False for instant conversions using built-in fallback table
+    use_live_rates = False
     
     # Currency rates instance
     _currency_rates = CurrencyRates() if FOREX_AVAILABLE else None

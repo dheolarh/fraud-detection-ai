@@ -394,68 +394,65 @@ async def create_transaction(
             file=sys.stderr, flush=True
         )
         
-        # Trigger fraud detection asynchronously
-        try:
-            import httpx
-            print(f"Calling fraud detection for TX-{new_transaction.transaction_id}", file=sys.stderr, flush=True)
+        # Build fraud payload (synchronous, no I/O — fast)
+        import httpx
+        import asyncio as _asyncio
 
-            profile_subject = sender if sender else receiver
-            account_profile = _build_account_profile(
-                db=db,
-                subject_user=profile_subject,
-                sender_id=new_transaction.sender_id,
-                receiver_id=new_transaction.receiver_id,
-            )
+        profile_subject = sender if sender else receiver
+        account_profile = _build_account_profile(
+            db=db,
+            subject_user=profile_subject,
+            sender_id=new_transaction.sender_id,
+            receiver_id=new_transaction.receiver_id,
+        )
 
-            request_meta = {
-                "ip_address": req.client.host if req.client else None,
-                "user_agent": req.headers.get("user-agent"),
-                "device_id": req.headers.get("x-device-id"),
-                "session_age_seconds": None,
-                "is_new_device": None,
-            }
+        request_meta = {
+            "ip_address": req.client.host if req.client else None,
+            "user_agent": req.headers.get("user-agent"),
+            "device_id": req.headers.get("x-device-id"),
+            "session_age_seconds": None,
+            "is_new_device": None,
+        }
 
-            enriched_payload = build_context_payload(
-                transaction={
-                    "transaction_id": new_transaction.transaction_id,
-                    "sender_id": new_transaction.sender_id,
-                    "sender_name": new_transaction.sender_name,
-                    "receiver_id": new_transaction.receiver_id,
-                    "receiver_name": new_transaction.receiver_name,
-                    "amount": float(new_transaction.amount),
-                    "currency": new_transaction.currency,
-                    "category": new_transaction.category,
-                    "location": new_transaction.location,
-                    "narration": new_transaction.narration,
-                    "timestamp": new_transaction.timestamp.isoformat(),
-                },
-                request_meta=request_meta,
-                account_profile=account_profile,
-            )
+        enriched_payload = build_context_payload(
+            transaction={
+                "transaction_id": new_transaction.transaction_id,
+                "sender_id": new_transaction.sender_id,
+                "sender_name": new_transaction.sender_name,
+                "receiver_id": new_transaction.receiver_id,
+                "receiver_name": new_transaction.receiver_name,
+                "amount": float(new_transaction.amount),
+                "currency": new_transaction.currency,
+                "category": new_transaction.category,
+                "location": new_transaction.location,
+                "narration": new_transaction.narration,
+                "timestamp": new_transaction.timestamp.isoformat(),
+            },
+            request_meta=request_meta,
+            account_profile=account_profile,
+        )
 
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                fraud_response = await client.post(
-                    "http://localhost:8000/api/fraud/analyze-smart",
-                    json=enriched_payload,
-                )
-                
-                if fraud_response.status_code == 200:
-                    fraud_result = fraud_response.json()
-                    print(f"✅ Fraud analysis complete: Verdict={fraud_result.get('verdict')}, Risk={fraud_result.get('risk_score')}", file=sys.stderr, flush=True)
-                else:
-                    print(f"⚠️  Fraud analysis returned status {fraud_response.status_code}", file=sys.stderr, flush=True)
-                    
-        except Exception as fraud_error:
-            # Don't fail transaction if fraud detection fails
-            import traceback
-            error_type = type(fraud_error).__name__
-            error_msg = str(fraud_error)
-            error_trace = traceback.format_exc()
-            print(f"⚠️  Fraud detection failed (transaction still completed):", file=sys.stderr, flush=True)
-            print(f"   Error Type: {error_type}", file=sys.stderr, flush=True)
-            print(f"   Error Message: {error_msg}", file=sys.stderr, flush=True)
-            print(f"   Traceback: {error_trace}", file=sys.stderr, flush=True)
+        async def _run_fraud_analysis(payload: dict, txn_id: int):
+            """Fire-and-forget fraud analysis — runs in background after transaction response."""
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    fraud_response = await client.post(
+                        "http://localhost:8000/api/fraud/analyze-smart",
+                        json=payload,
+                    )
+                    if fraud_response.status_code == 200:
+                        result = fraud_response.json()
+                        print(f"✅ Fraud analysis complete for TX-{txn_id}: Verdict={result.get('verdict')}, Risk={result.get('risk_score')}", file=sys.stderr, flush=True)
+                    else:
+                        print(f"⚠️  Fraud analysis returned {fraud_response.status_code} for TX-{txn_id}", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"⚠️  Background fraud analysis failed for TX-{txn_id}: {e}", file=sys.stderr, flush=True)
+
+        # Schedule fraud analysis as background task — transaction response is INSTANT
+        _asyncio.create_task(_run_fraud_analysis(enriched_payload, new_transaction.transaction_id))
+        print(f"🔁 Fraud analysis scheduled in background for TX-{new_transaction.transaction_id}", file=sys.stderr, flush=True)
         
+
         return TransactionResponse(
             transaction_id=new_transaction.transaction_id,
             sender_id=new_transaction.sender_id,

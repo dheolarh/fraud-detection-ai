@@ -290,7 +290,7 @@ async def get_user_risk_trend(user_id: str, db: Session = Depends(get_db)):
         result = await banking_client.get_transactions(
             user_id=user_id,
             start_date=thirty_days_ago,
-            limit=10000,
+            limit=1000,
         )
 
         transactions = result.get("transactions", [])

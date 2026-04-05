@@ -56,17 +56,24 @@ class RateLimiter:
 rate_limiter = RateLimiter(requests_per_minute=1000)  # Increased from 60 to 1000 for development
 
 
+LOCALHOST_IPS = {"127.0.0.1", "::1", "localhost"}
+
 async def rate_limit_middleware(request: Request, call_next):
     """
-    Rate limiting middleware for FastAPI
+    Rate limiting middleware for FastAPI.
+    Localhost and CORS preflight requests are always allowed.
     """
     client_ip = request.client.host
-    
+
+    # Skip rate limiting for local development frontend and CORS preflight
+    if client_ip in LOCALHOST_IPS or request.method == "OPTIONS":
+        return await call_next(request)
+
     if not rate_limiter.is_allowed(client_ip):
         raise HTTPException(
             status_code=429,
             detail="Too many requests. Please try again later."
         )
-    
+
     response = await call_next(request)
     return response

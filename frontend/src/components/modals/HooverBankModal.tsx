@@ -229,15 +229,15 @@ export function HooverBankModal({ open, onOpenChange, notifications = [], onSend
                    {activeTab === 'send' ? (
                       <form onSubmit={handleSendTransaction} className="space-y-6">
                          <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Target Territory</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Reciever's Country</Label>
                             <CountryDropdown value={destinationCountry} onChange={(country, currency) => { setDestinationCountry(country); setDestinationCurrency(currency); }} placeholder="Select Destination" className="h-11 bg-white/5 border-white/5 rounded-xl font-bold" />
                          </div>
                          <div className="grid grid-cols-1 gap-4">
-                            <AccountGenerator type="name" prefix="EXT" value={receiverName} onChange={setReceiverName} label="Target Party" />
-                            <AccountGenerator type="account" prefix="EXT" value={receiverId} onChange={setReceiverId} label="Target Registry ID" />
+                            <AccountGenerator type="name" prefix="EXT" value={receiverName} onChange={setReceiverName} label="Reciever's Name" />
+                            <AccountGenerator type="account" prefix="EXT" value={receiverId} onChange={setReceiverId} label="Reciever's Account Number" />
                          </div>
                          <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Remit Quantum ({BANK_CURRENCY})</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">Amount ({BANK_CURRENCY})</Label>
                             <div className="relative">
                                <Wallet className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
                                <Input type="number" step="0.01" placeholder="0.00" value={amount || ''} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className="h-11 pl-10 bg-white/5 border-white/5 rounded-xl font-bold font-display text-sm text-white" />

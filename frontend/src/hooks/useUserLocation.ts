@@ -82,41 +82,48 @@ export function useUserLocation(): UserLocation {
     }
 
     async function detectIPLocation(): Promise<{ location: string; country: string; currency: string } | null> {
+        // --- Primary: ipapi.co ---
         try {
-            // Use ipapi.co for IP geolocation (free, no API key needed)
-            // This will detect the actual IP location (including VPN location!)
             const response = await fetch('https://ipapi.co/json/', {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                },
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(5000),
             });
-
-            if (!response.ok) {
-                throw new Error('IP geolocation failed');
+            if (response.ok) {
+                const data: IPLocationResponse = await response.json();
+                // ipapi.co rate-limits return non-ok JSON with "reason" field
+                if ((data as any).reason) throw new Error('ipapi.co rate limited');
+                const city = data.city || 'Unknown';
+                const country = data.country_name || 'Unknown';
+                const currency = data.currency || 'USD';
+                console.log(`[ipapi.co] Location: ${city}, ${country}, Currency: ${currency}`);
+                return { location: `${city}, ${country}`, country: data.country_code || 'US', currency };
             }
-
-            const data: IPLocationResponse = await response.json();
-
-            // Build location string
-            const city = data.city || 'Unknown';
-            const country = data.country_name || 'Unknown';
-            const location = `${city}, ${country}`;
-            const currency = data.currency || 'USD';
-
-            console.log(`Location detected: ${location}, Currency: ${currency}`);
-
-            return {
-                location,
-                country: data.country_code || 'US',
-                currency,  // Use currency from IP API!
-            };
-        } catch (error) {
-            console.error('IP geolocation error:', error);
-
-            // Fallback: Try browser geolocation as secondary option
-            return tryBrowserGeolocation();
+        } catch (e) {
+            console.warn('ipapi.co failed, trying backup...', e);
         }
+
+        // --- Secondary: ip-api.com (no key needed, works on most VPNs) ---
+        try {
+            const response = await fetch('http://ip-api.com/json/?fields=status,city,country,countryCode,currency', {
+                signal: AbortSignal.timeout(5000),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success') {
+                    const city = data.city || 'Unknown';
+                    const country = data.country || 'Unknown';
+                    const currency = data.currency || 'USD';
+                    console.log(`[ip-api.com] Location: ${city}, ${country}, Currency: ${currency}`);
+                    return { location: `${city}, ${country}`, country: data.countryCode || 'US', currency };
+                }
+            }
+        } catch (e) {
+            console.warn('ip-api.com also failed, trying browser geolocation...', e);
+        }
+
+        // --- Tertiary: Browser geolocation ---
+        return tryBrowserGeolocation();
     }
 
     function tryBrowserGeolocation(): Promise<{ location: string; country: string; currency: string } | null> {
@@ -124,8 +131,6 @@ export function useUserLocation(): UserLocation {
             if ('geolocation' in navigator) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
-                        // Browser geolocation gives coordinates but not city/country
-                        // For now, just return null and let it fall back to USD
                         console.log('Browser geolocation:', position.coords);
                         resolve(null);
                     },
@@ -143,17 +148,15 @@ export function useUserLocation(): UserLocation {
 
 
     function setFallback(errorMsg: string) {
-        // Ultimate fallback to USD if all detection methods fail
-        const fallbackData = {
+        // Set 'International' as display but DO NOT cache it — so we retry on next use
+        setLocationData({
             location: 'International',
             currency: 'USD',
             currencySymbol: '$',
             isLoading: false,
             error: errorMsg,
-        };
-        setLocationData(fallbackData);
-        localStorage.setItem('user_location_data', JSON.stringify(fallbackData));
-        localStorage.setItem('user_location_timestamp', Date.now().toString());
+        });
+        // Intentionally NOT caching to localStorage so next request retries detection
     }
 
     function getCurrencySymbol(currencyCode: string): string {

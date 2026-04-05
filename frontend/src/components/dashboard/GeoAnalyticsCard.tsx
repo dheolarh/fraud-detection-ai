@@ -40,7 +40,7 @@ export function GeoAnalyticsCard() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-bold font-display uppercase tracking-widest text-muted-foreground flex items-center gap-2">
             <Globe2 className="h-4 w-4" />
-            Global Exposure
+            Global Analytics
           </CardTitle>
 
           <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest">

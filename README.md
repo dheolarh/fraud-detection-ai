@@ -442,6 +442,7 @@ This project now includes a second-version enhancement layer focused on smarter 
 - Added Risk Trend dashboard card (7-day vs 30-day average risk)
 - Added trend direction indicator (`up`, `down`, `stable`) with delta view
 - Added client support for `GET /api/fraud/trend/{user_id}`
+- Complete UI redesign and refinement across all dashboard components and modals
 
 ### Deployment and Configuration
 - Added `deployment.md` for setup/deploy guidance
